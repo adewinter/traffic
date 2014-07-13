@@ -3,20 +3,16 @@ Core module for class Car and Car Controller
 """
 import numpy as np
 from numpy.linalg import norm
-from pylab import figure, plot, show, xlabel, ylabel, title, legend, zeros
+from traffic.vecops import is_opposite, is_same_direction
 class Car(object):
     """
     Car object. Does self updating of state, position, velocity.
     """
-    def __init__(self, position=None, velocity=None, acceleration=None):
-        if not position:
-            position = np.array([0, 0], 'float')
+    def __init__(self, position=np.array([0, 0], 'float'), \
+                    velocity=np.array([0, 0], 'float'), \
+                    acceleration=np.array([0, 0], 'float')):
         self.position = position
-        if velocity == None:
-            velocity = np.array([0, 0], 'float')
         self.velocity = velocity
-        if acceleration == None:
-            acceleration = 0 #make acceleration a constant
         self.acceleration = acceleration
 
     def update(self, delta_t=10):
@@ -25,7 +21,7 @@ class Car(object):
         """
         state = self.state
         if state == 'STOP':
-            self.acceleration = 0
+            self.acceleration = np.array([0, 0], 'float')
             self.velocity = np.array([0, 0], 'float')
             return #no point in running more calculations for this cycle.
         
@@ -58,18 +54,24 @@ class Car(object):
             'SPEEDUP' (car velocity increasing)
         """
         m_vel = norm(self.velocity)
-        if m_vel <= 0 and self.acceleration <= 0: #we never 
-                                                  #want a car to go backwards
-            return 'STOP'        
+        m_acc = norm(self.acceleration)
+        if m_vel <= 0 and self.acceleration <= 0: #we never go backwards
+            return 'STOP'
         
-        if self.acceleration < 0:
+        if self.is_decelerating():
             return 'SLOWDOWN'
         
-        if self.acceleration == 0:
-            return 'CRUISE'  
+        if m_acc == 0:
+            return 'CRUISE'
         
-        if self.acceleration > 0:
+        if self.is_accelerating():
             return 'SPEEDUP'
+
+        raise Exception("Bad state in Car! IS_ACCCEL: %s, \
+                                        IS_DECEL:%s, \
+                                        STATE:%s" % (self.is_accelerating(), \
+                                                    self.is_decelerating(), \
+                                                    self))
 
     def turn(self, direction):
         """
@@ -81,6 +83,7 @@ class Car(object):
         'WEST'
         """
         vel_mag = norm(self.velocity)
+        acc_mag = norm(self.acceleration)
         direction_map = {
             'NORTH': np.array([0, 1], 'float'),
             'SOUTH': np.array([0, -1], 'float'),
@@ -95,57 +98,23 @@ class Car(object):
             direction_vector = direction_map[direction]
 
         self.velocity = direction_vector * vel_mag
+        self.acceleration = direction_vector * acc_mag
 
-        return self.velocity
-
-def do_command_line_run():
-    """
-    Just a test run
-    """
-    first_car = Car(velocity=np.array([0, 0.1]), acceleration=5)
-    print 'Mycar %s' % first_car
-    data = np.zeros((200, 5))
-    for i in range(100):
-        pritn = first_car.update()
-        if i == 99:
-            print pritn
-        data[i] = pritn
-
-    print 'Interim val:\t%s' % first_car
-    print 'Car state: %s' % first_car.state
-    print '\n\n'
-    first_car.acceleration = -1
-    print 'Car accel = -1 now'
-    first_car.turn('SOUTH')
-    print 'Car direction = SOUTH now'
-    for i in range(100, 200):
-        pritn = first_car.update()
-        if i == 100:
-            print pritn
-        data[i] = pritn
-
-    print 'Final val:\t%s' % first_car
-    time = np.linspace(0, (0.01*199), num=200)
+        return (self.velocity, self.acceleration)
 
 
-    norm_vel = zeros(200)
-    for k, i in data[:, [2,3]]:
-        norm_vel[k] = norm(i)
+    def is_decelerating(self):
+        """
+        Returns true when acceleration vector is pointing in antiparalell 
+        direction of velocity vector
+        """
+        return is_opposite(self.velocity, self.acceleration)
 
-    print data[0]
-    figure()
-    # plot(data[:, 0], data[:, 1], '.', label='Position')
-    plot(time, norm_vel, '.r', label="Normalized vel")
-    plot(time, data[:, 2], label='U')
-    plot(time, data[:, 3], label='V')
-    plot(time, data[:, 4], label='a')
-    xlabel('time(s)')
-    ylabel('stuff')
-    title('Car test velocity')
-    
-    legend()
-    show()
+    def is_accelerating(self):
+        """
+        Returns true when acceleration vector is pointing in paralell 
+        direction of velocity vector, and acceleration is positive.
+        """
+        m_acc = norm(self.acceleration)
+        return m_acc > 0 and is_same_direction(self.velocity, self.acceleration)
 
-    
-if __name__ == '__main__':
-    do_command_line_run()
